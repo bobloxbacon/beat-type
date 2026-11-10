@@ -235,7 +235,7 @@ kbd{font:600 12px system-ui,sans-serif;border:1px solid var(--line);border-botto
   <label for="lt">Song title and artist</label>
   <div class="row"><input type="text" id="lt" placeholder="Song title"><input type="text" id="la" placeholder="Artist"></div>
   <div class="bar"><button id="lf" disabled>Find lyrics and sync</button></div>
-  <p class="info" id="lfinfo" aria-live="polite">Finds timed lyrics online. Many tracks only have line timestamps, so word timing is an estimate. Needs internet and works from the saved file, not the preview link.</p>
+  <p class="info" id="lfinfo" aria-live="polite">Tries Lyrica first, then LRCLIB if needed. Many tracks only have line timestamps, so word timing is an estimate. Needs internet and works from the saved file, not the preview link.</p>
   <div id="lpw" hidden>
     <label for="lpick">Is your audio just a clip of the song? Pick the first line you hear</label>
     <select id="lpick"></select>
@@ -251,7 +251,7 @@ just take CONTROL</textarea>
   <details><summary>More lyric options</summary>
     <label for="lyoff">Lyrics timing offset (seconds). Use it if every word is early or late by the same amount.</label>
     <input type="number" id="lyoff" value="0" step="0.1">
-    <label for="lyu">Your own Lyrica server (optional backup address)</label>
+    <label for="lyu">Your own Lyrica server (optional custom address)</label>
     <input type="text" id="lyu" placeholder="http://localhost:9999">
   </details>
 </section>
@@ -395,18 +395,18 @@ just take CONTROL</textarea>
       <p>There are no accounts, no cookies and no analytics, and nothing you make is stored on a server.</p>
       <p><strong>What goes online:</strong></p>
       <ul>
-        <li>The song title and artist you type are sent to the lyrics services (LRCLIB, and Lyrica or your own server) when you press Find lyrics and sync.</li>
+        <li>The song title and artist you type are sent to the lyrics services (Lyrica or your own server first, then LRCLIB if needed) when you press Find lyrics and sync.</li>
         <li>Fonts load from Google Fonts, so Google sees your IP address as it does for any web font.</li>
         <li>AI sync downloads a speech model once (about 75 MB or 250 MB, your choice) and its code libraries. Your audio is analysed on your device.</li>
         <li>Saving MP4 or WebM loads a small video library from jsDelivr.</li>
         <li>Beat Type asks before it uses each of these services for the first time. If you say no, it uses on-device alternatives where they exist. Autosave keeps lyrics, timings and settings in this browser’s local storage only (never the song or pictures).</li>
       </ul>
       <div class="bar"><button class="alt sm" id="cclr">Forget my online-service choices</button></div>
-      <p><strong>Credits:</strong> lyric timing data from LRCLIB and Lyrica. Speech recognition uses OpenAI Whisper models through Transformers.js. Fonts: Fredoka, Fraunces, Anton, Allura and Playfair Display from Google Fonts.</p>
+      <p><strong>Credits:</strong> lyric timing data from Lyrica and LRCLIB. Speech recognition uses OpenAI Whisper models through Transformers.js. Fonts: Fredoka, Fraunces, Anton, Allura and Playfair Display from Google Fonts.</p>
       <p><strong>Rights:</strong> songs and lyrics belong to their owners. Beat Type does not store, provide or own any lyrics or music.</p>
     </details>
   </div>
-  <p class="info ft">Beat Type, version 35. Everything runs in your browser.</p>
+  <p class="info ft">Beat Type, version 36. Everything runs in your browser.</p>
 </footer>
 <div id="lock" hidden><div class="box"><div class="spin"></div><p id="lockt" style="font-size:20px;font-weight:600">AI is syncing your lyrics</p><p id="lockmsg">Starting…</p><div class="pbar" id="pbar" hidden><i id="pfill"></i></div><button class="alt" id="xcancel" hidden>Cancel</button><p style="opacity:.7;font-size:14px">Please don’t touch anything and keep this tab open. This can take a minute or two.</p></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -1575,7 +1575,7 @@ function lrclib(title,artist,d){
     })
   })
 }
-/* backup lookup: Lyrica public server (response shape read defensively) */
+/* Primary lookup: Lyrica public server (response shape read defensively). */
 var LYS=['https://wilooper-lyrica.hf.space','https://test-0k.onrender.com'];/* the public servers may go offline, so a self-hosted address is tried first */
 function tnum(v){if(typeof v==='string'&&v.indexOf(':')>-1){var m=v.match(/(\d+):(\d+(?:[.:]\d+)?)/);return m?+m[1]*60+parseFloat(m[2].replace(':','.')):NaN}return +v}
 function lyricaToLrc(j){
@@ -1752,15 +1752,16 @@ function applyLyrics(){
 function findLyrics(){
   if(!buf)return;var title=$('lt').value.trim(),artist=$('la').value.trim(),info=$('lfinfo');
   if(!title){info.textContent='Type the song title first.';return}
-  if(!askOnline('lyrics','Finding lyrics sends the song title and artist you typed to LRCLIB (and the Lyrica backup or your own server). Your audio is NOT sent.')){info.textContent='Lyrics lookup skipped. Paste the lyrics below instead.';return}
+  if(!askOnline('lyrics','Finding lyrics sends the song title and artist you typed to Lyrica (or your own server), then LRCLIB only if needed. Your audio is NOT sent.')){info.textContent='Lyrics lookup skipped. Paste the lyrics below instead.';return}
   stop();$('lf').disabled=true;info.textContent='Looking up synced lyrics…';
   var lerr=null;
-  lrclib(title,artist,buf.duration).catch(function(e){lerr=e;return null}).then(function(r){
+  info.textContent='Trying Lyrica first…';
+  lyrica(title,artist).catch(function(e){lerr=e;return null}).then(function(r){
     if(r)return r;
-    info.textContent='Not on the main service. Trying the backup (Lyrica)…';
-    return lyrica(title,artist)
+    info.textContent='No Lyrica result. Trying LRCLIB…';
+    return lrclib(title,artist,buf.duration).catch(function(e){lerr=e;return null})
   }).then(function(r){
-    if(!r){info.textContent=lerr?'Couldn’t reach the lyrics services. They need internet, and work only from the saved file opened in a browser, not the preview link.':'No synced lyrics found. Add the artist (the backup needs it), check the spelling, or paste the lyrics and use auto-sync.';return}
+    if(!r){info.textContent=lerr?'Couldn’t reach the lyrics services. They need internet, and work only from the saved file opened in a browser, not the preview link.':'No synced lyrics found. Add the artist (Lyrica needs it), check the spelling, or paste the lyrics and use auto-sync.';return}
     LF={r:r,all:parseLrc(r.syncedLyrics)};r.trackName=r.trackName||title;fillPick();$('lpw').hidden=false;return applyLyrics()
   }).catch(function(e){console.error(e);info.textContent='Something went wrong while placing the lyrics. Try again, or paste the lyrics and use auto-sync.'})
   .then(function(){$('lf').disabled=false})
