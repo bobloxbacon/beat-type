@@ -280,6 +280,17 @@ just take CONTROL</textarea>
   </details>
 </section>
 <section class="step"><h2><span class="n">4</span>Pick a look</h2>
+  <label for="preset">Quick creative preset</label>
+  <select id="preset">
+    <option value="custom">Custom (keep my settings)</option>
+    <option value="cinematic">Cinematic — warm film, landscape</option>
+    <option value="neon">Neon Pulse — glowing colour, vertical</option>
+    <option value="retro">Retro Pop — bold blocks, vertical</option>
+    <option value="glitch">Glitch Core — RGB distortion, landscape</option>
+    <option value="minimal">Minimal Mono — black &amp; white, landscape</option>
+    <option value="player">Music Player — cover art, vertical</option>
+  </select>
+  <p class="info">Presets instantly set a matching style, video shape and text size. Fine-tune everything below.</p>
   <label for="sty">Style</label>
   <select id="sty">
     <option value="mono">Black and white film, water and star</option>
@@ -406,7 +417,7 @@ just take CONTROL</textarea>
       <p><strong>Rights:</strong> songs and lyrics belong to their owners. Beat Type does not store, provide or own any lyrics or music.</p>
     </details>
   </div>
-  <p class="info ft">Beat Type, version 36. Everything runs in your browser.</p>
+  <p class="info ft">Beat Type, version 37. Everything runs in your browser.</p>
 </footer>
 <div id="lock" hidden><div class="box"><div class="spin"></div><p id="lockt" style="font-size:20px;font-weight:600">AI is syncing your lyrics</p><p id="lockmsg">Starting…</p><div class="pbar" id="pbar" hidden><i id="pfill"></i></div><button class="alt" id="xcancel" hidden>Cancel</button><p style="opacity:.7;font-size:14px">Please don’t touch anything and keep this tab open. This can take a minute or two.</p></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -1603,7 +1614,13 @@ function lyrica(title,artist){
   var q='/lyrics/?artist='+encodeURIComponent(artist)+'&song='+encodeURIComponent(title)+'&timestamps=true&fast=true',i=0,my=($('lyu').value||'').trim().replace(/\/+$/,''),bases=(my?[my]:[]).concat(LYS);
   function next(){
     if(i>=bases.length)return Promise.resolve(null);
-    return fetch(bases[i++]+q).then(function(r){return r.ok?r.json():null}).then(function(j){var l=j&&lyricaToLrc(j);return l?{syncedLyrics:l,trackName:title,artistName:artist}:next()}).catch(function(){return next()})
+    var base=bases[i++],controller=typeof AbortController!=='undefined'?new AbortController():null,
+        timer=controller?setTimeout(function(){controller.abort()},7000):null,
+        opts=controller?{signal:controller.signal}:{};
+    function clear(){if(timer){clearTimeout(timer);timer=null}}
+    return fetch(base+q,opts).then(function(r){if(!r.ok)return null;return r.json()})
+      .then(function(j){var l=j&&lyricaToLrc(j);clear();return l?{syncedLyrics:l,trackName:title,artistName:artist}:next()})
+      .catch(function(){clear();return next()})
   }
   return next()
 }
@@ -1755,8 +1772,8 @@ function findLyrics(){
   if(!askOnline('lyrics','Finding lyrics sends the song title and artist you typed to Lyrica (or your own server), then LRCLIB only if needed. Your audio is NOT sent.')){info.textContent='Lyrics lookup skipped. Paste the lyrics below instead.';return}
   stop();$('lf').disabled=true;info.textContent='Looking up synced lyrics…';
   var lerr=null;
-  info.textContent='Trying Lyrica first…';
-  lyrica(title,artist).catch(function(e){lerr=e;return null}).then(function(r){
+  info.textContent=artist?'Trying Lyrica first (7s per server)…':'Artist needed for Lyrica; trying LRCLIB…';
+  (artist?lyrica(title,artist):Promise.resolve(null)).catch(function(e){lerr=e;return null}).then(function(r){
     if(r)return r;
     info.textContent='No Lyrica result. Trying LRCLIB…';
     return lrclib(title,artist,buf.duration).catch(function(e){lerr=e;return null})
@@ -1764,7 +1781,7 @@ function findLyrics(){
     if(!r){info.textContent=lerr?'Couldn’t reach the lyrics services. They need internet, and work only from the saved file opened in a browser, not the preview link.':'No synced lyrics found. Add the artist (Lyrica needs it), check the spelling, or paste the lyrics and use auto-sync.';return}
     LF={r:r,all:parseLrc(r.syncedLyrics)};r.trackName=r.trackName||title;fillPick();$('lpw').hidden=false;return applyLyrics()
   }).catch(function(e){console.error(e);info.textContent='Something went wrong while placing the lyrics. Try again, or paste the lyrics and use auto-sync.'})
-  .then(function(){$('lf').disabled=false})
+  .then(function(){$('lf').disabled=false},function(e){console.error(e);info.textContent='Lyrics lookup stopped unexpectedly. Try again or paste lyrics manually.';$('lf').disabled=false})
 }
 ['lpick','lpt','lyoff'].forEach(function(id){$(id).addEventListener(id==='lpick'?'change':'input',function(){applyLyrics()})});
 $('lf').addEventListener('click',findLyrics);
@@ -1794,7 +1811,20 @@ $('aud').addEventListener('change',function(e){
 $('off').addEventListener('input',function(){$('offv').textContent=(+$('off').value).toFixed(2);if(buf)build();else redraw()});
 $('sen').addEventListener('input',function(){detect()});
 $('lyr').addEventListener('input',function(){clearTimings('Lyrics changed.');buildLO();build()});
-$('sty').addEventListener('change',function(){redraw()});
+$('sty').addEventListener('change',function(){if($('preset').value!=='custom')$('preset').value='custom';redraw()});
+$('preset').addEventListener('change',function(){
+  var presets={
+    cinematic:{sty:'dream',asp:'h',tsz:110,ow:'0',plh:'1'},
+    neon:{sty:'neon',asp:'v',tsz:115,ow:'1',plh:'1'},
+    retro:{sty:'pop',asp:'v',tsz:120,ow:'0',plh:'1'},
+    glitch:{sty:'glitch',asp:'h',tsz:105,ow:'1',plh:'1'},
+    minimal:{sty:'mono',asp:'h',tsz:100,ow:'1',plh:'1'},
+    player:{sty:'viz',asp:'v',tsz:100,ow:'0',plh:'1'}
+  };
+  var p=presets[this.value];if(!p)return;
+  Object.keys(p).forEach(function(k){$(k).value=String(p[k]);if(k==='tsz')$('tszv').textContent=p[k]+'%'});
+  redraw();
+});
 (function(){
   var m=[];
   if(!(window.AudioContext||window.webkitAudioContext))m.push('This browser cannot play or analyse audio, so most of Beat Type will not work. Please try Chrome or Edge.');
