@@ -135,6 +135,61 @@ kbd{font:600 12px system-ui,sans-serif;border:1px solid var(--line);border-botto
  .pvtop{position:static;margin:0;padding:0;box-shadow:none}.stage canvas{max-height:62vh}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* ===== v35 mobile UI polish ===== */
+@media(max-width:640px){
+  main{padding:12px 12px 28px}
+  .top{align-items:center;gap:8px}
+  .top .tools2{margin:0;gap:6px}
+  .top .tools2 button{font-size:12px;padding:8px 10px;min-height:40px}
+  h1{font-size:clamp(30px,9vw,42px);line-height:1.02}
+  p.lead{font-size:14px;margin:4px 0 14px}
+  .wrap{gap:12px;margin:0}
+  .pvtop{padding:8px 12px 10px;margin:0 -12px;border-bottom:1px solid var(--line)}
+  .stage{border-radius:10px;min-height:100px}
+  .stage canvas{max-height:25svh;max-width:100%;width:auto;height:auto;object-fit:contain}
+  .pvtop .bar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px 44px;gap:7px}
+  .pvtop .bar #info{grid-column:1/-1;min-width:0;font-size:12px;line-height:1.35}
+  .pvtop .bar button{min-width:0;padding:9px 8px}
+  .step{padding:13px;margin-bottom:11px;border-radius:13px}
+  .step h2{font-size:17px;margin-bottom:9px}
+  .n{width:26px;height:26px;font-size:14px}
+  label{font-size:13px;margin-top:9px}
+  .row{gap:8px}
+  .row>*{min-width:0}
+  .step .row:has(input[type="text"]){flex-direction:column}
+  input[type=file]{font-size:14px}
+  input[type=file]::file-selector-button{margin-bottom:4px}
+  textarea{min-height:150px;font-size:15px}
+  input[type=number],input[type=text],select,textarea{border-radius:10px;padding:10px}
+  .bar{gap:8px}
+  .bar button{min-height:44px}
+  .step .bar button{flex:1 1 130px}
+  details.tools{padding:10px 12px}
+  #tl{height:150px}
+  #tap{font-size:20px;min-height:76px;border-radius:12px}
+  #tapx{align-items:center}
+  #tapx button{flex:1 1 130px}
+  .info{font-size:13px;line-height:1.45}
+  .foot{padding:0 12px 28px}
+  .foot .step{padding:13px}
+  .foot p,.foot dd,.foot ul,.foot ol{font-size:13px}
+  .skip:focus{left:8px}
+}
+@media(max-width:380px){
+  .top .tools2{gap:4px}
+  .top .tools2 button{padding:7px 8px;font-size:11px}
+  .pvtop .bar{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px 40px;gap:5px}
+  .pvtop .bar button{font-size:13px;padding:8px 5px}
+  .step{padding:11px}
+  .step h2{font-size:16px}
+  .step .row{gap:6px}
+}
+@media(max-width:640px) and (orientation:landscape){
+  .pvtop{position:relative;top:auto}
+  .stage canvas{max-height:42svh}
+}
+
 </style>
 </head>
 <body>
@@ -351,7 +406,7 @@ just take CONTROL</textarea>
       <p><strong>Rights:</strong> songs and lyrics belong to their owners. Beat Type does not store, provide or own any lyrics or music.</p>
     </details>
   </div>
-  <p class="info ft">Beat Type, version 31. Everything runs in your browser.</p>
+  <p class="info ft">Beat Type, version 35. Everything runs in your browser.</p>
 </footer>
 <div id="lock" hidden><div class="box"><div class="spin"></div><p id="lockt" style="font-size:20px;font-weight:600">AI is syncing your lyrics</p><p id="lockmsg">Starting…</p><div class="pbar" id="pbar" hidden><i id="pfill"></i></div><button class="alt" id="xcancel" hidden>Cancel</button><p style="opacity:.7;font-size:14px">Please don’t touch anything and keep this tab open. This can take a minute or two.</p></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -1480,14 +1535,44 @@ function parseLrc(t){
 }
 function isCredit(x){return /^\s*(作词|作曲|编曲|制作人|混音|母带|词|曲|lyrics?|words?|music|compos\w*|written|arrang\w*|produc\w*|mix\w*|master\w*)(\s+by)?\s*[:：]/i.test(x)||/^\s*[\u3400-\u9fff]+\s*[:：]/.test(x)}
 function lrclib(title,artist,d){
-  var q='track_name='+encodeURIComponent(title)+(artist?'&artist_name='+encodeURIComponent(artist):''),B='https://lrclib.net/api/';
-  function js(u){return fetch(u).then(function(r){return r.ok?r.json():null})}
+  var B='https://lrclib.net/api/',wantedTitle=lyricWords(title),wantedArtist=lyricWords(artist),
+      q='track_name='+encodeURIComponent(title)+(artist?'&artist_name='+encodeURIComponent(artist):'');
+  function js(u){var opt=typeof AbortSignal!=='undefined'&&AbortSignal.timeout?{signal:AbortSignal.timeout(9000)}:{};return fetch(u,opt).then(function(r){return r.ok?r.json():null})}
+  function lyricWords(v){return String(v||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/&/g,' and ').replace(/\b(feat(?:uring)?|ft)\.?\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean)}
+  function sim(a,b){
+    if(!a.length||!b.length)return 0;
+    var A={},B2={},i,hit=0; a.forEach(function(x){A[x]=1});b.forEach(function(x){B2[x]=1});
+    Object.keys(A).forEach(function(x){if(B2[x])hit++});
+    var dice=2*hit/(a.length+b.length),same=a.join(' ')===b.join(' ')?1:0;
+    return Math.max(dice,same);
+  }
+  function versionTags(v){return lyricWords(v).filter(function(x){return /^(slowed|slow|reverb|sped|speed|up|nightcore|remix|mix|live|acoustic|instrumental|karaoke|cover|demo|edit|radio|extended|remastered|remaster|orchestral|version)$/.test(x)})}
+  function coreWords(v){return lyricWords(v).filter(function(x){return !/^(slowed|slow|reverb|sped|speed|up|nightcore|remix|mix|live|acoustic|instrumental|karaoke|cover|demo|edit|radio|extended|remastered|remaster|orchestral|version|dubstep)$/.test(x)})}
+  function rank(x){
+    var tn=lyricWords(x.trackName||x.name||''),an=lyricWords(x.artistName||x.artist||''),ts=sim(coreWords(wantedTitle),coreWords(tn)),as=artist?sim(wantedArtist,an):.65,
+        tv=versionTags(title),cv=versionTags(x.trackName||x.name||''),version=tv.length===cv.length&&tv.every(function(t){return cv.indexOf(t)>-1})?1:(tv.length||cv.length?0:1),
+        dur=Number(x.duration)||0,delta=dur&&d>0?Math.abs(dur-d):0,ds=dur&&d>0?Math.exp(-delta/Math.max(12,d*.12)):.45;
+    /* Identity comes first: a similarly long but unrelated track must never win. */
+    return {score:.58*ts+.25*as+.12*ds+.05*version,title:ts,artist:as,duration:ds,version:version,delta:delta};
+  }
+  function choose(list){
+    var a=(list||[]).filter(function(x){return x&&x.syncedLyrics&&String(x.syncedLyrics).trim().length>0}).map(function(x){x._lyricMatch=rank(x);return x});
+    a.sort(function(x,y){return y._lyricMatch.score-x._lyricMatch.score});
+    if(!a.length)return null;
+    var m=a[0]._lyricMatch;
+    /* Refuse weak metadata matches rather than silently loading another song's lyrics. */
+    if(m.title<.55||(artist&&m.artist<.5)||m.score<.66)return null;
+    return a[0];
+  }
   var first=artist?js(B+'get?'+q+'&duration='+Math.round(d)).catch(function(e){if(e&&e.name==='TypeError')throw e;return null}):Promise.resolve(null);
   return first.then(function(j){
-    if(j&&j.syncedLyrics)return j;
+    var exact=choose(j?[j]:[]);if(exact)return exact;
     return js(B+'search?'+(artist?q:'q='+encodeURIComponent(title))).then(function(a){
-      a=(a||[]).filter(function(x){return x.syncedLyrics});
-      a.sort(function(x,y){return Math.abs((x.duration||0)-d)-Math.abs((y.duration||0)-d)});return a[0]||null})
+      var best=choose(a);if(best)return best;
+      /* Some catalog entries index the title under the general q parameter. */
+      if(artist)return js(B+'search?q='+encodeURIComponent(title)).then(choose);
+      return null;
+    })
   })
 }
 /* backup lookup: Lyrica public server (response shape read defensively) */
